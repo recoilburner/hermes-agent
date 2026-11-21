@@ -390,6 +390,20 @@ _ONE_OFF_COPY: dict[str, str] = {
         "so nothing was run. Check your network and send /retry; asking for the file in smaller "
         "pieces also helps."
     ),
+    # Rides failure_reason="truncated": every continuation attempt ended as a partial-stream stub
+    # with no visible text. The output budget was never reached, so say what was observed (#144116).
+    # A clean close (no transport error, no finish_reason) and a transport drop read differently.
+    "stream_closed_no_text": (
+        "{label} ended the stream before any answer text arrived and never reported a finish "
+        "reason, so no answer was produced. Hermes has no sign the output budget was reached — "
+        "this is usually the provider or a proxy in front of it cutting long replies short. "
+        "Send /retry; asking for the work in smaller steps also helps."
+    ),
+    "stream_dropped_no_text": (
+        "The connection to {label} dropped before any answer text arrived, so no answer was "
+        "produced. Hermes has no sign the output budget was reached. Check your network and send "
+        "/retry; if it keeps happening, the provider or a proxy in front of it may be cutting replies."
+    ),
     # Rides failure_reason="truncated": clean EOF (no transport error, no finish_reason)
     # mid tool-call, retries exhausted — not a network problem on the user's side (#102766).
     "stream_closed_tool_call": (

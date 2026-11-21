@@ -361,6 +361,8 @@ def _continue_text(st: _Trunc, _retry: TurnRetryState, assistant_message: Any) -
     agent._vprint(
         f"{agent.log_prefix}⚠️  Not continuing — each attempt would only grow the prompt."
         if filled is not None else
+        f"{agent.log_prefix}⚠️  Response stream still interrupted after {n} continuation attempts — "
+        if st.is_stub else
         f"{agent.log_prefix}⚠️  Response still truncated after {n} continuation attempts — "
         + ("keeping the partial response received so far." if partial_response
            else "no visible text was produced."),
@@ -372,9 +374,17 @@ def _continue_text(st: _Trunc, _retry: TurnRetryState, assistant_message: Any) -
             f"{partial_response}\n\n{notice}" if partial_response else notice,
             f"Prompt used {filled[0]} of {filled[1]} context tokens; no room to answer",
         )
+    # Classify by the FINAL attempt (earlier ones may have ended differently). A stub that delivered
+    # nothing reached no output budget, so it gets stream copy, never the reasoning/max_tokens advice:
+    # a clean close and a transport drop are told apart as for tool calls (#102766, #144116).
+    if not st.is_stub:
+        return st.end_turn(partial_response or _CEILING_NO_TEXT,
+                           "Response remained truncated after 4 continuation attempts")
+    clean_eof = bool(getattr(st.response, "_clean_eof", False))
     return st.end_turn(
-        partial_response or _CEILING_NO_TEXT,
-        "Response remained truncated after 4 continuation attempts",
+        partial_response or site_copy("stream_closed_no_text" if clean_eof else "stream_dropped_no_text",
+                                      label=provider_label_for(agent.provider)),
+        "Response stream interrupted at the continuation limit",
     )
 
 

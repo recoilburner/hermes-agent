@@ -358,25 +358,26 @@ def _continue_text(st: _Trunc, _retry: TurnRetryState, assistant_message: Any) -
     )
     # The one-shot reasoning-off override must not leak into the next turn.
     agent._ephemeral_reasoning_off = False
-    agent._vprint(
-        f"{agent.log_prefix}⚠️  Not continuing — each attempt would only grow the prompt."
-        if filled is not None else
-        f"{agent.log_prefix}⚠️  Response stream still interrupted after {n} continuation attempts — "
-        if st.is_stub else
-        f"{agent.log_prefix}⚠️  Response still truncated after {n} continuation attempts — "
-        + ("keeping the partial response received so far." if partial_response
-           else "no visible text was produced."),
-        force=True, diagnostic=True,
-    )
+    if filled is not None:
+        _diag = f"{agent.log_prefix}⚠️  Not continuing — each attempt would only grow the prompt."
+    else:
+        _diag = (f"{agent.log_prefix}⚠️  "
+                 + ("Final response stream ended without reporting an output limit"
+                    if st.is_stub else "Response still truncated")
+                 + f" after {n} continuation attempts — "
+                 + ("keeping the partial response received so far." if partial_response
+                    else "no visible text was produced."))
+    agent._vprint(_diag, force=True, diagnostic=True)
     if filled is not None:
         notice = _WINDOW_FILLED.format(prompt=filled[0], ctx=filled[1])
         return st.end_turn(
             f"{partial_response}\n\n{notice}" if partial_response else notice,
             f"Prompt used {filled[0]} of {filled[1]} context tokens; no room to answer",
         )
-    # Classify by the FINAL attempt (earlier ones may have ended differently). A stub that delivered
-    # nothing reached no output budget, so it gets stream copy, never the reasoning/max_tokens advice:
-    # a clean close and a transport drop are told apart as for tool calls (#102766, #144116).
+    # Classify by the FINAL attempt only (earlier ones may have ended differently): when it is a
+    # stub, that attempt reported no output limit, so it gets stream copy rather than the
+    # reasoning/max_tokens advice. ``_clean_eof`` set means the stream closed cleanly; otherwise
+    # the copy says the connection dropped, as for tool calls (#102766, #144116).
     if not st.is_stub:
         return st.end_turn(partial_response or _CEILING_NO_TEXT,
                            "Response remained truncated after 4 continuation attempts")

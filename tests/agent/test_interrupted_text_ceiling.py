@@ -160,3 +160,21 @@ def test_stub_with_dropped_tool_calls_still_gets_stream_copy(recovery_agent):
     ])
     assert "dropped before any answer text" in result["final_response"]
     assert "output-token limit" not in result["final_response"]
+
+
+def _diagnostic(agent):
+    return [c.args[0] for c in agent._vprint.call_args_list if c.kwargs.get("diagnostic")][-1]
+
+
+@pytest.mark.parametrize("content", ["", "partial answer"], ids=["no-text", "with-text"])
+def test_stub_diagnostic_is_a_complete_sentence(recovery_agent, content):
+    _exhaust(recovery_agent, [_response(interrupted=True, clean_eof=True, content=content) for _ in range(4)])
+    line = _diagnostic(recovery_agent)
+    assert "ended without reporting an output limit" in line
+    assert line.endswith(("keeping the partial response received so far.", "no visible text was produced."))
+
+
+def test_length_diagnostic_unchanged(recovery_agent):
+    _exhaust(recovery_agent, [_response(interrupted=False, content="") for _ in range(4)])
+    line = _diagnostic(recovery_agent)
+    assert "Response still truncated after" in line and line.endswith("no visible text was produced.")
